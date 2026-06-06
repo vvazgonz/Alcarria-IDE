@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>La Alcarria — IDE Geográfico</title>
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=Cinzel:wght@400;600&display=swap" rel="stylesheet" />
+
+  <script>
+    (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})
+    ({key: "AIzaSyDNeTZ6rsGdTUQsJgUEZWHvDIO6W1rK2Po", v: "weekly"});
+  </script>
+
+  <style>
+    :root {
+      --parchment: #f5ecd7;
+      --ink:       #1a1209;
+      --sepia:     #7a5c2e;
+      --rust:      #8b3a1a;
+      --gold:      #c9922a;
+      --panel-bg:  rgba(245, 236, 215, 0.97);
+      --shadow:    0 4px 24px rgba(26,18,9,0.18);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'EB Garamond', Georgia, serif;
+      background: var(--ink);
+      color: var(--ink);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── HEADER ── */
+    #header {
+      background: var(--ink);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      border-bottom: 2px solid var(--gold);
+      flex-shrink: 0;
+      z-index: 10;
+    }
+    #header h1 {
+      font-family: 'Cinzel', serif;
+      color: var(--gold);
+      font-size: 1.35rem;
+      letter-spacing: 0.06em;
+      line-height: 1.2;
+    }
+    #header h1 span {
+      display: block;
+      font-size: 0.65rem;
+      color: var(--parchment);
+      letter-spacing: 0.18em;
+      font-family: 'EB Garamond', serif;
+      font-style: italic;
+      opacity: 0.8;
+    }
+
+    /* ── MAIN ── */
+    #main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── SIDEBAR ── */
+    #sidebar {
+      width: 270px;
+      flex-shrink: 0;
+      background: var(--panel-bg);
+      border-right: 1px solid rgba(122,92,46,0.3);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #sidebar-title {
+      font-family: 'Cinzel', serif;
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+      color: var(--sepia);
+      padding: 14px 16px 8px;
+      border-bottom: 1px solid rgba(122,92,46,0.2);
+      text-transform: uppercase;
+    }
+
+    #layers {
+      padding: 10px 12px;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .layer-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 10px;
+      margin-bottom: 4px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s;
+      border: 1px solid transparent;
+    }
+    .layer-item:hover { background: rgba(122,92,46,0.1); }
+    .layer-item.active { border-color: rgba(122,92,46,0.25); background: rgba(201,146,42,0.08); }
+
+    .layer-toggle {
+      width: 36px;
+      height: 20px;
+      background: #ccc;
+      border-radius: 10px;
+      position: relative;
+      flex-shrink: 0;
+      transition: background 0.2s;
+      cursor: pointer;
+    }
+    .layer-toggle.on { background: var(--gold); }
+    .layer-toggle::after {
+      content: '';
+      position: absolute;
+      width: 16px; height: 16px;
+      background: white;
+      border-radius: 50%;
+      top: 2px; left: 2px;
+      transition: left 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    .layer-toggle.on::after { left: 18px; }
+
+    .layer-icon { font-size: 1.2rem; flex-shrink: 0; }
+    .layer-label {
+      font-size: 0.88rem;
+      line-height: 1.3;
+      color: var(--ink);
+    }
+    .layer-label small {
+      display: block;
+      font-size: 0.72rem;
+      color: var(--sepia);
+      font-style: italic;
+    }
+
+    /* ── INFO PANEL ── */
+    #info-panel {
+      margin: 10px 12px;
+      border-top: 1px solid rgba(122,92,46,0.2);
+      padding-top: 10px;
+      font-size: 0.82rem;
+      color: var(--sepia);
+      font-style: italic;
+      min-height: 60px;
+    }
+    #info-panel strong {
+      display: block;
+      font-family: 'Cinzel', serif;
+      font-size: 0.78rem;
+      font-style: normal;
+      color: var(--rust);
+      margin-bottom: 4px;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── MAP ── */
+    #map {
+      flex: 1;
+      background: #2a2010;
+    }
+
+    /* ── POPUP ── */
+    .custom-popup {
+      position: absolute;
+      background: var(--panel-bg);
+      border: 1px solid var(--gold);
+      border-radius: 8px;
+      padding: 14px 16px;
+      max-width: 260px;
+      box-shadow: var(--shadow);
+      font-family: 'EB Garamond', serif;
+      z-index: 1000;
+      pointer-events: auto;
+    }
+    .custom-popup h3 {
+      font-family: 'Cinzel', serif;
+      font-size: 0.95rem;
+      color: var(--rust);
+      margin-bottom: 6px;
+      letter-spacing: 0.04em;
+    }
+    .custom-popup p {
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--ink);
+    }
+    .custom-popup .popup-tag {
+      display: inline-block;
+      font-size: 0.68rem;
+      background: var(--gold);
+      color: white;
+      border-radius: 3px;
+      padding: 1px 6px;
+      margin-bottom: 6px;
+      font-family: 'Cinzel', serif;
+      letter-spacing: 0.06em;
+    }
+    .popup-close {
+      position: absolute;
+      top: 8px; right: 10px;
+      cursor: pointer;
+      font-size: 1rem;
+      color: var(--sepia);
+      line-height: 1;
+    }
+    .popup-close:hover { color: var(--rust); }
+
+    /* ── LEGEND dot ── */
+    .legend-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-left: auto;
+    }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <div style="font-size:1.8rem">🏔️</div>
+  <h1>La Alcarria
+    <span>Sistema de Información Geográfica · TIG 2025–26</span>
+  </h1>
+</div>
+
+<div id="main">
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div id="sidebar-title">Capas de información</div>
+    <div id="layers">
+
+      <div class="layer-item active" data-layer="cid" onclick="toggleLayer('cid', this)">
+        <div class="layer-toggle on" id="toggle-cid"></div>
+        <div class="layer-icon">⚔️</div>
+        <div class="layer-label">
+          Poema del Mío Cid
+          <small>Castejón · Anguita · s. XII</small>
+        </div>
+        <div class="legend-dot" style="background:#8b3a1a"></div>
+      </div>
+
+      <div class="layer-item active" data-layer="nobleza" onclick="toggleLayer('nobleza', this)">
+        <div class="layer-toggle on" id="toggle-nobleza"></div>
+        <div class="layer-icon">👑</div>
+        <div class="layer-label">
+          Historia nobiliaria
+          <small>Mondéjar · Pastrana · Ducados</small>
+        </div>
+        <div class="legend-dot" style="background:#5c2d91"></div>
+      </div>
+
+      <div class="layer-item active" data-layer="agua" onclick="toggleLayer('agua', this)">
+        <div class="layer-toggle on" id="toggle-agua"></div>
+        <div class="layer-icon">💧</div>
+        <div class="layer-label">
+          Infraestructura hidráulica
+          <small>Embalses · Trasvase Tajo-Segura</small>
+        </div>
+        <div class="legend-dot" style="background:#1a6ea8"></div>
+      </div>
+
+      <div class="layer-item active" data-layer="nuclear" onclick="toggleLayer('nuclear', this)">
+        <div class="layer-toggle on" id="toggle-nuclear"></div>
+        <div class="layer-icon">⚡</div>
+        <div class="layer-label">
+          Infraestructura energética
+          <small>Zorita · Trillo · Nuclear</small>
+        </div>
+        <div class="legend-dot" style="background:#2d7a2d"></div>
+      </div>
+
+      <div class="layer-item active" data-layer="cela" onclick="toggleLayer('cela', this)">
+        <div class="layer-toggle on" id="toggle-cela"></div>
+        <div class="layer-icon">📖</div>
+        <div class="layer-label">
+          Viaje a la Alcarria (Cela)
+          <small>Ruta literaria de 1946</small>
+        </div>
+        <div class="legend-dot" style="background:#b07d2a"></div>
+      </div>
+
+    </div>
+
+    <div id="info-panel">
+      <strong>Información</strong>
+      Haz clic en cualquier marcador del mapa para ver su descripción.
+    </div>
+  </div>
+
+  <!-- MAP -->
+  <div id="map"></div>
+
+</div>
+
+<script>
+// ── DATOS ───────────────────────────────────────────────────────────────────
+
+const LAYERS = {
+
+  cid: {
+    color: '#8b3a1a',
+    label: 'Poema del Mío Cid',
+    points: [
+      {
+        lat: 40.93860325338453, lng: -2.785024163451209,
+        name: 'Castejón de Henares',
+        desc: 'En el Poema del Mío Cid (vv. 458–469), el Campeador toma Castejón por sorpresa al amanecer, mientras sus habitantes salían a atender sus cultivos. La emboscada en este enclave del Henares fue uno de sus primeros golpes tras el destierro.',
+        quote: '«En Castejón todos se levantaban, / abren las puertas, fuera saliendo estaban, / para ver sus cultivos y todas sus propiedades. / Todos han salido, las puertas abiertas dejaban, / con la poca gente que en Castejón se quedara, / la gente que estaba fuera toda iba dispersada. / El Campeador salió de la emboscada, / corría hacia Castejón sin falta, / los moros y las moras los tenía como ganancia, / y todo ese ganado cuanto alrededor anda. / Mio Cid don Rodrigo a la puerta se encaminaba, / los que la defienden, al ver que era atacada, / tuvieron miedo y quedó desamparada.» (vv. 458–469)'
+      },
+      {
+        lat: 41.02637967539557, lng: -2.368142635002985,
+        name: 'Anguita',
+        desc: 'Las cuevas de Anguita son mencionadas explícitamente en el Cantar (vv. 542–544) como punto de paso del ejército cidiano, que remontaba el Henares hacia tierras de conquista.',
+        quote: '«Se van Henares arriba a toda velocidad, / cruzan por la Alcarria y siguen adelante, / por las cuevas de Anguita ellos pasando van.» (vv. 542–544)'
+      }
+    ]
+  },
+
+  nobleza: {
+    color: '#5c2d91',
+    label: 'Grandes poblaciones',
+    points: [
+      {
+        lat: 40.824475084558166, lng: -3.047708400737747,
+        name: 'Hita',
+        desc: 'Hogar de Juan Ruiz, el arcipreste de Hita, famoso por su obra, El libro del buen amor.',
+        quote: ''
+      },
+      {
+        lat: 40.322595284770166, lng: -3.1097495372385717,
+        name: 'Mondéjar',
+        desc: 'Capital del Marquesado de Mondéjar, título concedido por los Reyes Católicos a Íñigo López de Mendoza en 1512. La familia Mendoza, una de las más influyentes de Castilla, dejó una profunda huella arquitectónica y política en toda la Alcarria.',
+        quote: 'Marquesado de Mondéjar · Reyes Católicos · Casa de Mendoza'
+      },
+      {
+        lat: 40.417124203153584, lng: -2.919880221081993,
+        name: 'Pastrana',
+        desc: 'Sede del Ducado de Pastrana, creado en 1569 para Ruy Gómez de Silva, favorito de Felipe II. Pastrana fue un importante centro cultural del siglo XVI y alberga la colegiata de la Asunción, con los célebres tapices de la conquista de Tánger.',
+        quote: 'Ducado de Pastrana · Felipe II · Ruy Gómez de Silva · 1569'
+      },
+      {
+        lat: 40.484736748853564, lng:-3.3656320747058266,
+        name: 'Alcalá de Henares',
+        desc: '',
+        quote: ''
+      }
+    ]
+  },
+
+  agua: {
+    color: '#1a6ea8',
+    label: 'Infraestructura hidráulica',
+    points: [
+      {
+        lat: 40.49218262347719, lng: -2.748705276608927,
+        name: 'Embalse de Entrepeñas',
+        desc: 'Construido sobre el río Tajo entre 1947 y 1956, es uno de los grandes embalses del sistema. Junto a Buendía, forma la "cabecera del Tajo" desde la que parte el trasvase Tajo-Segura, una de las infraestructuras hidráulicas más polémicas de España.',
+        quote: 'Río Tajo · Capacidad: 835 hm³ · Inaugurado en 1956'
+      },
+      {
+        lat: 40.39846521161471,  lng: -2.7837299972269074, 
+        name: 'Embalse de Buendía',
+        desc: 'El mayor de los embalses de la cabecera del Tajo. Junto a Entrepeñas actúa como reservorio del trasvase Tajo-Segura, cuyo nivel mínimo de activación ha sido objeto de controversia política permanente entre las comunidades autónomas.',
+        quote: 'Río Guadiela · Capacidad: 1.639 hm³ · El mayor de la cabecera'
+      },
+      {
+        lat: 40.362996036299435, lng: -2.8233570107200348,
+        name: 'Salto de Bolarque',
+        desc: 'Punto de origen del trasvase Tajo-Segura, inaugurado en 1979. Desde aquí el agua bombeada asciende 270 metros para iniciar su recorrido hacia la cuenca del Segura. Una de las infraestructuras hidráulicas más significativas —y debatidas— de la España contemporánea.',
+        quote: 'Origen del Trasvase Tajo-Segura · Inaugurado en 1979'
+      },
+      {
+        lat: 40.274270832875395, lng: -2.958593931608883,
+        name: 'Embalse de Almoguera',
+        desc: 'Embalse sobre el Tajo aguas abajo del Salto de Bolarque. El pueblo de Almoguera, a orillas del embalse, guarda un vínculo personal con este proyecto: fue el lugar de nacimiento de mi abuela, y estas tierras me han visto crecer.',
+        quote: 'Río Tajo · Almoguera · Vínculo personal'
+      }
+    ]
+  },
+
+  nuclear: {
+    color: '#2d7a2d',
+    label: 'Infraestructura energética',
+    points: [
+      {
+        lat: 40.34818398209504,  lng: -2.885190025815097,
+        name: 'Central Nuclear José Cabrera (Zorita)',
+        desc: 'Primera central nuclear de España, inaugurada en 1968 en Zorita de los Canes. Cerrada en 2006, se encuentra en pleno proceso de desmantelamiento. Representa el hardware obsoleto de la red eléctrica: la infraestructura que ha llegado al final de su vida útil y está siendo retirada, devolviendo el terreno a su estado original.',
+        quote: '1ª central nuclear española · Inaugurada 1968 · Cierre 2006 · En desmantelamiento'
+      },
+      {
+        lat: 40.703085049066004, lng: -2.622703282590341, 
+        name: 'Central Nuclear de Trillo',
+        desc: 'La central nuclear activa de la Alcarria, inaugurada en 1988. Sigue generando electricidad para la red nacional y está previsto que opere hasta 2035. En palabras propias: el nodo activo, el núcleo duro que sigue empujando megavatios hacia el sur para alimentar las bases de datos de la capital.',
+        quote: 'Inaugurada 1988 · Potencia: 1.066 MW · Previsto cierre 2035'
+      }
+    ]
+  },
+
+  cela: {
+    color: '#b07d2a',
+    label: 'Viaje a la Alcarria (Cela, 1946)',
+    polyline: true,
+    points: [ 
+      { lat: 40.6292, lng: -3.1667, name: 'Guadalajara', desc: 'Punto de partida del viaje en su viaje. Guadalajara no está aún en la Alcarria.', order: 0 },
+      { lat: 40.6526208584061, lng: -3.127463978367372, name: 'Taracena', desc: '"Taracena es un pueblo de adobes, un pueblo de color gris claro, ceniciento; un pueblo que parece cubierto de polvo, de un polvo finísimo, delicado, como el de los libros que llevan varios años durmiendo en la estantería, sin que nadie los toque, sin que nadie los moleste."', quote: '"A la tierra color tierra <br> le maduró un sarpullido <br> Bajo el sol de Taracena <br> cuelga la vida de un hilo."', order: 1 },
+      { lat: 40.74312700203706, lng:  -3.032090291401175, name: 'Torija', desc: '"Desde esta entrada tiene un gran aspecto, con su castillo y la torre cuadrada de la iglesia."', order: 2 },
+      { lat: 40.7611, lng: -2.8722, name: 'Brihuega', desc: '"Desde el atajo, Brihuega tiene muy buen aire, con sus murallas y la vieja fábrica de paños, grande y redonda como una plaza de toros. Por detrás del pueblo corre el Tajuña, con sus orillas frondosas y su vega verde. Brihuega tiene un color gris azulado, como de humo de cigarro puro. Parece una ciudad antigua, con mucha piedra, con casas bien construidas y árboles corpulentos. La decoración ha cambiado de repente, parece como si se hubiera descorrido un telón."',quote: '"Brihuega es dichosa <br> desde que encontró <br> y a su morenita <br> un templo le alzó."', order: 3 },
+      { lat: 40.823998687613724,  lng: -2.6983246307138464, name: 'Masegoso', desc: '"Masegoso es un pueblo grande, polvoriento, de color plata con algunos reflejos de oro a la luz de la mañana, con un cruce de carreteras."', order: 5 },
+      { lat: 40.783116396167365,  lng: -2.62481859794317, name: 'Cifuentes', desc: '"un pueblo hermoso, alegre, con mucha agua, con mujeres de ojos negros y profundos, con comercios bien surtidos que venden camas niqueladas, juegos de licorera y seis copas con bandeja de espejo, y cromos saludables, gozosos, de cien colores, que representan La Sagrada Cena o un molino del Tirol rodeado de altas cumbres nevadas."', order: 6 },
+      { lat: 40.73372386962795,  lng: -2.6277822705190075, name: 'Gárgoles de Abajo', desc: 'Gárgoles es un pueblo huertano, con el terreno bien trabajado y la gente aplicada a su labor. En Gárgoles la carretera se pega al río y así marchan los dos ya hasta Trillo.', order: 7 },
+      { lat: 40.701153368185,  lng: -2.591866765530042, name: 'Trillo', desc: '"Al llegar a Trillo el paisaje es aún más feraz. La vegetación crece al apoyo del agua, y los árboles suben, airosos como en Brihuega. Esta tierra, con agua, parece una tierra muy buena; hasta se ve algún que otro castaño, de vez en cuando. A la entrada del pueblo hay una casa muy arreglada, toda cubierta de flores (...) La cascada de Cifuentes es una hermosa cola de caballo, de unos quince o veinte metros de altura, de agua espumeante y rugidora. Sus márgenes están rodeadas de pájaros que se pasan el día silbando."',
+        quote: '"Sobre la cascada canta el ruiseñor. <br> A orillas del Tajo pesca el labrador. <br> En la tierna huerta labra el pescador. <br> Granan los geranios sobre albo verdor. <br> Los árboles tienen aire de señor. <br> Desde Trillo huele el mundo a otro olor."', order: 8 },
+      { lat: 40.65045341578569, lng: -2.561470831272164, name: 'Viana', quote: 'Sin agua va el arroyo, <br> sin casta el toro, <br> sin sombra crece el chopo <br> color de oro. Bajo las Tetas duermen, <br> cada mañana, <br> las casas de Viana, <br> color de plomo.', order:9 }, 
+      { lat: 40.635763037489895, lng: -2.589440002026191, name: 'La Puerta', desc: '"Los vecinos de La Puerta viven del carbón vegetal y de cultivar las huertas; hay también algo de pesca. "',
+        quote: 'Los de la Puerta, <br> pantorrilludos, <br> siete pares de medías <br> llevan algunos.', order:10},
+      { lat: 40.62621859261542, lng: -2.724337617478327, name: 'Durón', quote: '"Por el monte Trascastillo <br> llega un hombre hasta Durón. <br> Lleva ya mucho camino entre espalda y corazón. <br> Camina como un suspiro, <br> le loquea la razón. <br> Dice llamarse Camilo <br> y ser su pueblo Padrón. <br> Al hombro lleva el hatillo <br> y a remolque, la ilusión. <br> Por el monte Trascastillo <br> llega un hombre hasta Durón."', order: 11 },
+      { lat: 40.62886203112704, lng: -2.754695147247712, name: 'Budia', desc: '"Budia es un pueblo grande, con casas antiguas, con un pasado probablemente esplendoroso."', order: 12 },
+      { lat: 40.60659979007391, lng: -2.749240636527148, name: 'El Olivar', desc: '"El Olivar está a media legua de Budia, monte arriba. Es un pueblo miserable, perdido en la sierra, en tierra de lobos y rodeado de barrancos."', order: 13 },
+      { lat: 40.556762478549, lng: -2.650837192390801, name: 'Pareja', desc: '"Le sorprende el primer claro del amanecer a la vista ya de Pareja, en un terreno de buena vega y bien cultivada, en un campo rojo de arcilla, lleno de huertas entre las que se ve, de vez en cuando, algún ladrillar con las gentes ya afanadas al trabajo. Pareja es un pueblo industrioso y grande, con casas nuevas al lado de otras en ruinas y una fonda en la plaza principal. La plaza es amplia y cuadrada, y en el centro tiene una fuente de varios caños, con un pilón alrededor, y un olmo añoso —olma le llaman, porque es redondo-, copudo, matriarcal, un olmo tan viejo, quizá, como la pie dra más vieja del pueblo."', order: 14 },
+      { lat: 40.53105717162383, lng: -2.6325759796838755, name: 'Casasana', desc: '"Casasana es un pueblo subido encima de un monte, el cerro de la Veleta, un poco por el lado contrario que es más tendido. Casasana no se ve hasta que ya se está encima. Es un pueblo minúsculo, con escaso cultivo y mucho ganado vacuno; ochenta y tantas vacas. En Casasana fue el único pueblo de la Alcarria en el que el viajero encontró vacas de leche blancas y negras, de raza holandesa, como las de Santander. "', order: 15 },
+      { lat: 40.48557382182546, lng: -2.6604055697417976, name: 'Córcoles', desc: '"La agricultura de Córcoles es rica y próspera, y el pueblo vive bien desde que le compraron las tierras, ciertamente por mucho menos de lo que valían, al conde de Arcentales; ahora, en Córcoles, todos son propietarios y cada cual vive de lo suyo. La gente habla con cariño y con respeto del conde de Arcentales, y está contenta con la compra."', quote: 'Verde está el campo de anís. <br> Un águila color gris <br> vuela sobre el camposanto. <br> Sobre la flor del acanto <br> una vieja se hace pis. <br> Azul, el campo de anís.', order: 16},
+      { lat: 40.48463491423561, lng: -2.7295555690835496, name: 'Sacedón', desc: '"Sacedón, que está rodeado de campos de trigo verde y lozano, parece un pueblo importante y muy industrioso. El caserío se extiende bastante y la torre de la iglesia destaca airosa sobre todo él."', order: 17 },
+      { lat: 40.54368158800868, lng: -2.9577225235872473, name: 'Tendilla', desc: '"Dos o tres kilómetros antes de llegar a Tendilla, y a mano izquierda de la carretera, hay unas ruinas corrientes; el viajero no sabe si serán históricas, lo que sí sabe es que le parecieron poco interesantes. Al pueblo, y a orillas del arroyo que lleva su mismo nombre, se entra por una alameda muy bonita y bastante frondosa. (...) <br> Tendilla es un pueblo de soportales planos, largo como una longaniza y estirado todo lo largo de la carretera. En este pueblo es donde tiene un olivar el escritor don Pío Baroja, para poder tener aceite todo el año."', order: 18 },
+      { lat: 40.4500, lng: -2.9167, name: 'Pastrana', desc: '"A la mañana siguiente, cuando el viajero se asomó a la plaza de la Hora, y entró, de verdad y para su uso, en Pastrana, la primera sensación que tuvo fue la de encontrarse en una ciudad medieval, en una gran ciudad medieval."', order: 19 },
+      { lat: 40.33278582954276, lng: -2.8875686847675968, name: 'Zorita de los Canes', desc: '"Zorita de los Canes está situada en una curva del Tajo, al lado de los inútiles pilares de un puente que nunca se construyó, rodeada de campos de cáñamo y echada a la sombra de las ruinas del castillo de la orden de Calatrava. Del castillo quedan en pie algún muro, dos o tres arcos y un par de bóvedas. Está estratégicamente situado sobre un cerrillo rocoso, difícil de subir."', order: 20 }
+    ]
+  },
+
+};
+
+// ── MAPA ────────────────────────────────────────────────────────────────────
+
+let map;
+const markerObjects = {};
+const polylineObjects = {};
+let activePopup = null;
+
+async function initMap() {
+  const { Map } = await google.maps.importLibrary("maps");
+  const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
+
+  map = new Map(document.getElementById("map"), {
+    zoom: 9,
+    center: { lat: 40.52, lng: -2.82 },
+    mapId: "DEMO_MAP_ID",
+    mapTypeId: "terrain",
+    mapTypeControl: true,
+    mapTypeControlOptions: {
+      style: google.maps.MapTypeControlStyle.DROPDOWN_MENU,
+      position: google.maps.ControlPosition.TOP_RIGHT
+    },
+    streetViewControl: false,
+    fullscreenControl: true
+  });
+
+  // Render all layers
+  for (const [layerId, layer] of Object.entries(LAYERS)) {
+    markerObjects[layerId] = [];
+
+    // Draw polyline for Cela route
+    if (layer.polyline) {
+      const sorted = [...layer.points].sort((a, b) => a.order - b.order);
+      const path = sorted.map(p => ({ lat: p.lat, lng: p.lng }));
+      const poly = new google.maps.Polyline({
+        path,
+        geodesic: true,
+        strokeColor: layer.color,
+        strokeOpacity: 0.7,
+        strokeWeight: 2.5,
+        map
+      });
+      polylineObjects[layerId] = poly;
+    }
+
+    layer.points.forEach((pt, idx) => {
+      const el = document.createElement('div');
+      el.style.cssText = `
+        width: ${layer.polyline ? 22 : 26}px;
+        height: ${layer.polyline ? 22 : 26}px;
+        border-radius: 50%;
+        background: ${layer.color};
+        border: 2.5px solid rgba(255,255,255,0.85);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        font-size: ${layer.polyline ? '0.6rem' : '0.8rem'};
+        color: white;
+        font-weight: bold;
+        font-family: 'Cinzel', serif;
+        transition: transform 0.15s;
+      `;
+      el.textContent = layer.polyline ? (pt.order) : '';
+      el.title = pt.name;
+
+      el.addEventListener('mouseenter', () => el.style.transform = 'scale(1.2)');
+      el.addEventListener('mouseleave', () => el.style.transform = 'scale(1)');
+
+      const marker = new AdvancedMarkerElement({
+        map,
+        position: { lat: pt.lat, lng: pt.lng },
+        content: el,
+        title: pt.name
+      });
+
+      marker.addListener('click', () => showPopup(pt, layer));
+      markerObjects[layerId].push(marker);
+    });
+  }
+}
+
+// ── POPUP ───────────────────────────────────────────────────────────────────
+
+function showPopup(pt, layer) {
+  closePopup();
+
+  const panel = document.getElementById('info-panel');
+  panel.innerHTML = `<strong>${pt.name}</strong>${pt.desc}`;
+
+  // Also show floating popup on map
+  const div = document.createElement('div');
+  div.className = 'custom-popup';
+  div.innerHTML = `
+    <span class="popup-close" onclick="closePopup()">✕</span>
+    <span class="popup-tag">${layer.label}</span>
+    <h3>${pt.name}</h3>
+    <p>${pt.desc}</p>
+    ${pt.quote ? `<p style="margin-top:8px;font-style:italic;color:#7a5c2e;font-size:0.8rem">${pt.quote}</p>` : ''}
+  `;
+
+  div.style.cssText = `
+    position: absolute;
+    top: 80px;
+    left: 290px;
+    background: rgba(245,236,215,0.98);
+    border: 1.5px solid #c9922a;
+    border-radius: 8px;
+    padding: 14px 16px;
+    max-width: 300px;
+    box-shadow: 0 4px 24px rgba(26,18,9,0.25);
+    font-family: 'EB Garamond', serif;
+    z-index: 1000;
+  `;
+
+  document.body.appendChild(div);
+  activePopup = div;
+}
+
+function closePopup() {
+  if (activePopup) {
+    activePopup.remove();
+    activePopup = null;
+  }
+}
+
+// ── TOGGLE LAYERS ───────────────────────────────────────────────────────────
+
+function toggleLayer(layerId, itemEl) {
+  const toggle = document.getElementById('toggle-' + layerId);
+  const isOn = toggle.classList.contains('on');
+
+  toggle.classList.toggle('on', !isOn);
+  itemEl.classList.toggle('active', !isOn);
+
+  const markers = markerObjects[layerId] || [];
+  markers.forEach(m => { m.map = isOn ? null : map; });
+
+  if (polylineObjects[layerId]) {
+    polylineObjects[layerId].setMap(isOn ? null : map);
+  }
+}
+
+initMap();
+</script>
+</body>
+</html>
